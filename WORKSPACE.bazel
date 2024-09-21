@@ -1,0 +1,160 @@
+workspace(name = "contraint-propagation-example")
+
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+CXX_STANDARD = ["-std=c++23"]
+
+COMMON_CXX_WARNINGS = [
+    "-Werror",
+    "-Wall",
+    "-Wextra",
+    "-Wpedantic",
+    "-Wconversion",
+    "-Wnon-virtual-dtor",
+    "-Wold-style-cast",
+    "-Wcast-align",
+    "-Wunused",
+    "-Woverloaded-virtual",
+    "-Wmisleading-indentation",
+    "-Wnull-dereference",
+    "-Wdouble-promotion",
+    "-Wformat=2",
+    "-Wimplicit-fallthrough",
+]
+
+# toolchains_llvm also loads rules_cc but possibly an older version
+http_archive(
+    name = "rules_cc",
+    sha256 = "2037875b9a4456dce4a79d112a8ae885bbc4aad968e6587dca6e64f3a0900cdf",
+    strip_prefix = "rules_cc-0.0.9",
+    urls = ["https://github.com/bazelbuild/rules_cc/releases/download/0.0.9/rules_cc-0.0.9.tar.gz"],
+)
+
+TOOLCHAINS_LLVM_COMMIT = "b1a6c86b42ee2373574d0e6862d9d9d5405c3146"
+
+http_archive(
+    name = "toolchains_llvm",
+    integrity = "sha256-hdEfwQEvZaPD/gp6A9iDSIxxKOBYrn+ttFYjAHfFby8=",
+    strip_prefix = "bazel-toolchain-{commit}".format(
+        commit = TOOLCHAINS_LLVM_COMMIT,
+    ),
+    url = "https://github.com/oliverlee/bazel-toolchain/archive/{commit}.tar.gz".format(
+        commit = TOOLCHAINS_LLVM_COMMIT,
+    ),
+)
+
+load("@toolchains_llvm//toolchain:deps.bzl", "bazel_toolchain_dependencies")
+
+bazel_toolchain_dependencies()
+
+load("@toolchains_llvm//toolchain:rules.bzl", "llvm_toolchain")
+
+# https://github.com/bazel-contrib/toolchains_llvm/blob/192cf04bbb11b29a8ca6756e269d27a840bfa14b/toolchain/internal/repo.bzl
+llvm_toolchain(
+    name = "llvm18_toolchain",
+    cxx_flags = {
+        "": [
+            "-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE",
+            "-stdlib=libc++",
+            "-Wshadow",
+        ] + COMMON_CXX_WARNINGS + CXX_STANDARD,
+    },
+    # Link UBSan C++ runtime libraries if the `ubsan` feature is enabled
+    # https://github.com/bazelbuild/bazel/issues/12797#issuecomment-980641064
+    # use `link_libs` to prevent overriding default `link_flags`
+    # https://github.com/grailbio/bazel-toolchain/blob/ceeedcc4464322e05fe5b8df3749cc02273ee083/toolchain/cc_toolchain_config.bzl#L148-L150
+    link_libs = {
+        "": ["-fsanitize-link-c++-runtime"],
+    },
+    llvm_version = "18.1.8",
+)
+
+load("@llvm18_toolchain//:toolchains.bzl", "llvm_register_toolchains")
+
+llvm_register_toolchains()
+
+BAZEL_CLANG_FORMAT_COMMIT = "1fd2a042798ede8d6f5498ea92287bc1204260fa"
+
+http_archive(
+    name = "bazel_clang_format",
+    integrity = "sha256-wcS8GuHvn57FgtMHGLVlBZB+pZ4ojkploCzlwU+ZDFc=",
+    strip_prefix = "bazel_clang_format-{commit}".format(
+        commit = BAZEL_CLANG_FORMAT_COMMIT,
+    ),
+    url = "https://github.com/oliverlee/bazel_clang_format/archive/{commit}.tar.gz".format(
+        commit = BAZEL_CLANG_FORMAT_COMMIT,
+    ),
+)
+
+RULES_CLANG_TIDY_COMMIT = "efa53bab83ee4a631f80d3581f51b51d5ca00143"
+
+http_archive(
+    name = "rules_clang_tidy",
+    integrity = "sha256-tDxw/Y7S7/qBp/a+4pTEz3VUb2SPA0klz4/liNSCivo=",
+    strip_prefix = "rules_clang_tidy-{commit}".format(
+        commit = RULES_CLANG_TIDY_COMMIT,
+    ),
+    url = "https://github.com/oliverlee/rules_clang_tidy/archive/{commit}.tar.gz".format(
+        commit = RULES_CLANG_TIDY_COMMIT,
+    ),
+)
+
+load("@rules_clang_tidy//:dependencies.bzl", "rules_clang_tidy_dependencies")
+
+rules_clang_tidy_dependencies()
+
+http_archive(
+    name = "buildifier_prebuilt",
+    sha256 = "e46c16180bc49487bfd0f1ffa7345364718c57334fa0b5b67cb5f27eba10f309",
+    strip_prefix = "buildifier-prebuilt-6.1.0",
+    urls = [
+        "https://github.com/keith/buildifier-prebuilt/archive/6.1.0.tar.gz",
+    ],
+)
+
+load("@buildifier_prebuilt//:deps.bzl", "buildifier_prebuilt_deps")
+
+buildifier_prebuilt_deps()
+
+load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
+
+bazel_skylib_workspace()
+
+load("@buildifier_prebuilt//:defs.bzl", "buildifier_prebuilt_register_toolchains")
+
+buildifier_prebuilt_register_toolchains()
+
+http_archive(
+    name = "rules_multirun",
+    sha256 = "0e124567fa85287874eff33a791c3bbdcc5343329a56faa828ef624380d4607c",
+    url = "https://github.com/keith/rules_multirun/releases/download/0.9.0/rules_multirun.0.9.0.tar.gz",
+)
+
+BAZEL_COMPILE_COMMANDS_EXTRACTOR_COMMIT = "1e08f8e0507b6b6b1f4416a9a22cf5c28beaba93"
+
+http_archive(
+    name = "hedron_compile_commands",
+    integrity = "sha256-BEsUixEeF87mHYw6ru1CBp9zJUYDgjQK/KSRn4JlCUw=",
+    strip_prefix = "bazel-compile-commands-extractor-{commit}".format(
+        commit = BAZEL_COMPILE_COMMANDS_EXTRACTOR_COMMIT,
+    ),
+    url = "https://github.com/hedronvision/bazel-compile-commands-extractor/archive/{commit}.tar.gz".format(
+        commit = BAZEL_COMPILE_COMMANDS_EXTRACTOR_COMMIT,
+    ),
+)
+
+load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
+
+hedron_compile_commands_setup()
+
+load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
+
+hedron_compile_commands_setup_transitive()
+
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
+
+hedron_compile_commands_setup_transitive_transitive()
+
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
+
+hedron_compile_commands_setup_transitive_transitive_transitive()

@@ -1,0 +1,33 @@
+filegroup(
+    name = "format-config",
+    srcs = [".clang-format"],
+)
+
+filegroup(
+    name = "tidy-config",
+    srcs = [".clang-tidy"],
+)
+
+cc_library(
+    name = "sym",
+    srcs = [
+        "constraint.hpp",
+        "detail/tuple_for_each.hpp",
+        "detail/type_name.hpp",
+        "expression.hpp",
+        "is_unconstrained.hpp",
+        "op/identity.hpp",
+        "op/op_util.hpp",
+        "op/plus.hpp",
+        "symbol.hpp",
+    ],
+    hdrs = [
+        "sym.hpp",
+    ],
+)
+
+cc_binary(
+    name = "example",
+    srcs = ["example.cpp"],
+    deps = [":sym"],
+)

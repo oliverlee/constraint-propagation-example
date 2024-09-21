@@ -1,0 +1,107 @@
+load("@buildifier_prebuilt//:rules.bzl", "buildifier")
+load("@rules_multirun//:defs.bzl", "multirun")
+
+alias(
+    name = "clang18_toolchain",
+    actual = select({
+        "@platforms//os:macos": "@llvm18_toolchain//:cc-toolchain-aarch64-darwin",
+        "@platforms//os:linux": "@llvm18_toolchain//:cc-toolchain-x86_64-linux",
+    }),
+)
+
+buildifier(
+    name = "buildifier.check",
+    lint_mode = "warn",
+    mode = "check",
+)
+
+buildifier(
+    name = "buildifier",
+    lint_mode = "warn",
+    mode = "fix",
+)
+
+genrule(
+    name = "gen-clang-format",
+    outs = ["clang-format.bash"],
+    cmd = """
+echo "#!/bin/bash" > $@
+echo "cd \\$$BUILD_WORKSPACE_DIRECTORY" >> $@
+echo "exec bazel build \\$$@ //..." >> $@
+""",
+)
+
+sh_binary(
+    name = "clang-format.check",
+    srcs = ["clang-format.bash"],
+    args = [
+        "--aspects=@bazel_clang_format//:defs.bzl%check_aspect",
+        "--output_groups=report",
+        "--keep_going",
+    ],
+)
+
+sh_binary(
+    name = "clang-format",
+    srcs = ["clang-format.bash"],
+    args = [
+        "--aspects=@bazel_clang_format//:defs.bzl%fix_aspect",
+        "--output_groups=report",
+        "--keep_going",
+        "--use_action_cache=false",
+    ],
+)
+
+multirun(
+    name = "format.check",
+    commands = [
+        ":buildifier.check",
+        ":clang-format.check",
+    ],
+)
+
+multirun(
+    name = "format",
+    commands = [
+        ":buildifier",
+        ":clang-format",
+    ],
+)
+
+genrule(
+    name = "gen-clang-tidy",
+    outs = ["clang-tidy.bash"],
+    cmd = """
+echo "#!/bin/bash" > $@
+echo "cd \\$$BUILD_WORKSPACE_DIRECTORY" >> $@
+echo "exec bazel build {options} \\$${{@:-//...}}" >> $@
+""".format(
+        options = " ".join([
+            "--extra_toolchains=//tools:clang18_toolchain",
+            "--aspects=@rules_clang_tidy//:aspects.bzl%check",
+            "--output_groups=report",
+            "--keep_going",
+            "--verbose_failures",
+        ]),
+    ),
+)
+
+# lint all targets with default options
+#  bazel run //tools:lint
+#
+# lint with a single check on a single target
+#   bazel run //tools:lint -- \
+#     --@rules_clang_tidy//:extra-options=--checks='-*,clang-analyzer-core.uninitialized.Assign' \
+#     //test:point_test
+#
+sh_binary(
+    name = "clang-tidy",
+    srcs = ["clang-tidy.bash"],
+)
+
+multirun(
+    name = "lint",
+    commands = [
+        ":clang-tidy",
+    ],
+)

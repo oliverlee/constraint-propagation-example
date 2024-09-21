@@ -1,0 +1,7 @@
+bazel-*
+
+.cache/
+external
+compile_commands.json
+
+user.bazelrc

@@ -1,0 +1,165 @@
+#pragma once
+
+#include "constraint.hpp"
+#include "is_unconstrained.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <cstddef>
+#include <ostream>
+#include <string>
+#include <string_view>
+#include <type_traits>
+
+namespace sym {
+namespace detail {
+
+/// compile-time string constant
+///
+template <std::size_t N>
+struct [[nodiscard]]
+string_constant
+{
+  std::array<char, N> chars{};
+
+  consteval string_constant(const char (&str)[N])
+      : chars{[&str] {
+          auto tmp = std::array<char, N>{};
+          std::ranges::copy(str, tmp.begin());
+          return tmp;
+        }()}
+  {}
+
+  [[nodiscard]]
+  constexpr operator std::string_view() const
+  {
+    return std::string_view{chars.begin(), chars.size()};
+  }
+};
+
+template <const char* begin, std::size_t size>
+struct [[nodiscard]]
+string_literal
+{
+  [[nodiscard]]
+  constexpr operator std::string_view() const
+  {
+    return std::string_view{begin, size};
+  }
+};
+
+}  // namespace detail
+
+/// crtp helper providing common `Symbol` operations dervied from basis
+/// operations
+///
+template <class Symbol>
+struct symbol_base
+{
+  template <class Self>
+    requires std::is_same_v<Symbol, std::remove_cvref_t<Self>>
+  friend auto operator<<(std::ostream& os, const Self& self) -> auto&
+  {
+    os << "symbol(" << self.name() << ") [" << self.constraint() << "]";
+    return os;
+  }
+};
+
+/// symbol class template
+///
+template <
+    class String = std::string,
+    class Constraint = std::remove_cvref_t<decltype(constraint::real)>>
+class [[nodiscard]] symbol
+    : String,
+      Constraint,
+      symbol_base<symbol<String, Constraint>>
+{
+public:
+  using constraint_type = Constraint;
+
+  static constexpr auto is_unconstrained = std::is_same_v<
+      constraint_type,
+      std::remove_cvref_t<decltype(constraint::real)>>;
+
+  constexpr explicit symbol(String name, Constraint c = {})
+      : String{std::move(name)}, Constraint{c}
+  {}
+
+  [[nodiscard]]
+  constexpr auto name() const -> std::string_view
+  {
+    return static_cast<const String&>(*this);
+  }
+
+  [[nodiscard]]
+  constexpr auto constraint() const -> const constraint_type&
+  {
+    return static_cast<const constraint_type&>(*this);
+  }
+
+  template <class Refined>
+  [[nodiscard]]
+  constexpr auto operator[](Refined c) && -> symbol<String, Refined>
+  {
+    const auto is_narrowing =
+        [&c1 = std::as_const(*this).constraint(), &c2 = std::as_const(c)] {
+          return c1.min() <= c2.min() and c1.max() >= c2.max();
+        };
+
+    assert(is_narrowing() and  //
+           "constraint value does not refine existing constraint on symbol.");
+    return symbol<String, Refined>{std::move(*this), c};
+  }
+};
+
+template <class String>
+symbol(String) -> symbol<std::string>;
+
+/// trait specifying is a symbol is unconstrained
+///
+template <class... Ts>
+struct is_unconstrained<symbol<Ts...>>
+    : std::bool_constant<symbol<Ts...>::is_unconstrained>
+{};
+
+// non-owning type-erased view of a symbol
+class [[nodiscard]] any_symbol_view
+{
+  std::string_view name_;
+  constraint::any_ordered c_;
+
+public:
+  using constraint_type = constraint::any_ordered;
+
+  template <class Symbol>
+  constexpr explicit any_symbol_view(const Symbol& s)
+      : name_{s.name()}, c_{s.constraint()}
+  {}
+
+  [[nodiscard]]
+  constexpr auto name() const -> std::string_view
+  {
+    return name_;
+  }
+
+  [[nodiscard]]
+  constexpr auto constraint() const -> const constraint_type&
+  {
+    return c_;
+  }
+};
+
+inline namespace literals {
+
+template <detail::string_constant s>
+consteval auto operator""_symbol()
+{
+  static constexpr auto sv = std::string_view{s};
+
+  return symbol<detail::string_literal<sv.begin(), sv.size()>>{{}};
+}
+
+}  // namespace literals
+}  // namespace sym
