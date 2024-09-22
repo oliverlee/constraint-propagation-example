@@ -2,7 +2,6 @@
 
 #include "constraint.hpp"
 #include "detail/static_instance.hpp"
-#include "is_unconstrained.hpp"
 
 #include <algorithm>
 #include <array>
@@ -80,9 +79,9 @@ class [[nodiscard]] symbol : symbol_base<symbol<String, Constraint>>
 public:
   using constraint_type = Constraint;
 
-  static constexpr auto is_unconstrained = std::is_same_v<
+  static constexpr auto is_unconstrained = std::is_same<
       constraint_type,
-      std::remove_cvref_t<decltype(constraint::real)>>;
+      std::remove_cvref_t<decltype(constraint::real)>>{};
 
   constexpr explicit symbol(String name) : s_{std::move(name)} {}
 
@@ -114,13 +113,6 @@ public:
 
 template <class String>
 symbol(String) -> symbol<std::string>;
-
-/// trait specifying is a symbol is unconstrained
-///
-template <class... Ts>
-struct is_unconstrained<symbol<Ts...>>
-    : std::bool_constant<symbol<Ts...>::is_unconstrained>
-{};
 
 // non-owning type-erased view of a symbol
 class [[nodiscard]] any_symbol_view : symbol_base<any_symbol_view>

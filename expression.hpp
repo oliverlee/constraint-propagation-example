@@ -2,7 +2,6 @@
 
 #include "detail/static_instance.hpp"
 #include "detail/tuple_for_each.hpp"
-#include "is_unconstrained.hpp"
 #include "op/identity.hpp"
 #include "symbol.hpp"
 
@@ -80,6 +79,14 @@ class expression
       std::tuple_size_v<Args> != 0,
       "`Args` must be a specialization of `std::tuple`");
 
+  template <template <class...> class list, class... Ts>
+  static consteval auto
+  determined_unconstrained(std::type_identity<list<Ts...>>)
+      -> std::bool_constant<(Ts::is_unconstrained and ...)>
+  {
+    return {};
+  }
+
   template <class PreconditionVisitor>
   constexpr expression(PreconditionVisitor precondition, Args args)
       : args_{std::move(args)}
@@ -93,10 +100,13 @@ public:
   using op_type = Op;
   using constraint_type = Constraint;
 
+  static constexpr auto is_unconstrained =
+      determined_unconstrained(std::type_identity<Args>{});
+
   constexpr explicit expression(Args args)
       : expression{
             std::conditional_t<
-                is_unconstrained<expression>::value,
+                is_unconstrained,
                 skip_precondition_check,
                 check_symbol_constraints<>>{},
             std::move(args)}
@@ -146,15 +156,6 @@ public:
     return os;
   }
 };
-
-/// determines if an expression is unconstained
-///
-/// true if all symbols are unconstrained, otherwise false
-///
-template <class Op, class... Ts, class Constraint>
-struct is_unconstrained<expression<Op, std::tuple<Ts...>, Constraint>>
-    : std::bool_constant<(is_unconstrained<Ts>::value and ...)>
-{};
 
 /// expression promotion
 ///

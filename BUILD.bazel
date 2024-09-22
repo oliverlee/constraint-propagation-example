@@ -16,7 +16,6 @@ cc_library(
         "detail/tuple_for_each.hpp",
         "detail/type_name.hpp",
         "expression.hpp",
-        "is_unconstrained.hpp",
         "op/identity.hpp",
         "op/op_util.hpp",
         "op/plus.hpp",
