@@ -101,6 +101,28 @@ struct args_base<std::tuple<Ts...>>
   }
 };
 
+template <template <class...> class list, class... Ts>
+static consteval auto determined_unconstrained(std::type_identity<list<Ts...>>)
+    -> std::bool_constant<(Ts::is_unconstrained and ...)>
+{
+  return {};
+}
+
+template <class Visitor>
+constexpr auto visitor_adaptor(std::reference_wrapper<Visitor> v)
+{
+  return [v]<class T>(const T& element) {
+    if constexpr (requires { element.visit(v); }) {
+      element.visit(v);
+    } else if constexpr (std::is_invocable_v<Visitor, const T&>) {
+      v(element);
+    } else {
+      static_assert(
+          false, "element must define `visit` or be visitor invocable");
+    }
+  };
+}
+
 }  // namespace detail
 
 /// expression type
@@ -110,38 +132,44 @@ class expression : detail::args_base<Args>
 {
   using args_base_type = detail::args_base<Args>;
 
-  template <template <class...> class list, class... Ts>
-  static consteval auto
-  determined_unconstrained(std::type_identity<list<Ts...>>)
-      -> std::bool_constant<(Ts::is_unconstrained and ...)>
-  {
-    return {};
-  }
-
-  template <class PreconditionVisitor>
-  constexpr expression(PreconditionVisitor precondition, Args args)
-      : args_base_type{std::move(args)}
-  {
-    visit(std::ref(precondition));
-    assert(
-        precondition and "inconsistent symbolic constraints within expression");
-  }
-
 public:
   using op_type = Op;
   using constraint_type = Constraint;
 
   static constexpr auto is_unconstrained =
-      determined_unconstrained(std::type_identity<Args>{});
+      detail::determined_unconstrained(std::type_identity<Args>{});
 
+private:
+  template <class PreconditionVisitor>
+  constexpr expression(PreconditionVisitor precondition, Args args)
+      : args_base_type{std::move(args)}
+  {
+    if constexpr (is_unconstrained) {
+      // do nothing
+    } else if constexpr (args_base_type::is_empty) {
+      static constexpr auto check = [] {
+        auto v = check_symbol_constraints<std::vector<any_symbol_view>>{};
+        const auto args = args_base_type{}.args();
+
+        detail::tuple_for_each(args, detail::visitor_adaptor(std::ref(v)));
+
+        return bool(v);
+      }();
+
+      static_assert(check, "inconsistent symbolic constraints within expression");
+    } else {
+      visit(std::ref(precondition));
+      assert(
+          precondition and
+          "inconsistent symbolic constraints within "
+          "expression");
+    }
+  }
+
+public:
   constexpr expression()
     requires (args_base_type::is_empty)
-      : expression{
-            std::conditional_t<
-                is_unconstrained,
-                skip_precondition_check,
-                check_symbol_constraints<>>{},
-            Args{}}
+      : expression{check_symbol_constraints<>{}, Args{}}
   {}
 
   constexpr explicit expression(Args args)
@@ -168,16 +196,7 @@ public:
   template <class Visitor>
   constexpr auto visit(Visitor v) const
   {
-    detail::tuple_for_each(args(), [v]<class T>(const T& element) {
-      if constexpr (requires { element.visit(v); }) {
-        element.visit(v);
-      } else if constexpr (std::is_invocable_v<Visitor, const T&>) {
-        v(element);
-      } else {
-        static_assert(
-            false, "element must define `visit` or be visitor invocable");
-      }
-    });
+    detail::tuple_for_each(args(), detail::visitor_adaptor(v));
   }
 
   friend auto operator<<(std::ostream& os, const expression& ex) -> auto&

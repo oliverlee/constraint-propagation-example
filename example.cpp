@@ -73,7 +73,7 @@ auto main() -> int
 #if 0
   // constraint application on a symbol must be a refinement
   {
-    // runtime error - `constexpr auto x` results in a compile-time error
+    // Assertion failed: (is_narrowing() and "constraint value does not refine existing constraint on symbol."), function operator[], file symbol.hpp, line 124.
     const auto x = "x"_symbol[constraint::positive][constraint::negative];
     constexpr auto y = "y"_symbol[constraint::negative];
     const auto x_plus_y = x + y;
@@ -85,7 +85,7 @@ auto main() -> int
 #if 0
   // expression creation validates constraint consistency
   {
-    // runtime error - `constexpr auto two_x` results in a compile-time error
+    // error: static assertion failed due to requirement 'check': inconsistent symbolic constraints within expression
     const auto two_x =
         "x"_symbol[constraint::positive] + "x"_symbol[constraint::negative];
 
