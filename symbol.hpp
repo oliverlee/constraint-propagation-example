@@ -49,6 +49,17 @@ string_literal
   }
 };
 
+template <class T>
+struct is_string_literal : std::false_type
+{};
+
+template <const char* begin, std::size_t size>
+struct is_string_literal<string_literal<begin, size>> : std::true_type
+{};
+
+template <class T>
+inline constexpr auto is_string_literal_v = is_string_literal<T>::value;
+
 }  // namespace detail
 
 /// crtp helper providing common `Symbol` operations dervied from basis
@@ -74,7 +85,7 @@ template <
 class [[nodiscard]] symbol : symbol_base<symbol<String, Constraint>>
 {
   [[no_unique_address]]
-  String s_;
+  String s_{};
 
 public:
   using constraint_type = Constraint;
@@ -82,6 +93,10 @@ public:
   static constexpr auto is_unconstrained = std::is_same<
       constraint_type,
       std::remove_cvref_t<decltype(constraint::real)>>{};
+
+  symbol()
+    requires (detail::is_string_literal_v<String>)
+  = default;
 
   constexpr explicit symbol(String name) : s_{std::move(name)} {}
 

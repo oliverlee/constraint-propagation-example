@@ -41,8 +41,7 @@ auto main() -> int
     std::cout << two_x << "\n";
     // expression { sym::op::plus, expression { sym::op::identity, symbol(x) [double: [-inf, inf]] } double: [-inf, inf], expression { sym::op::identity, symbol(x) [double: [-inf, inf]] } double: [-inf, inf] } double: [-inf, inf]
     std::cout << "sizeof(two_x): " << sizeof(two_x) << "\n";
-    // sizeof(two_x): 2
-
+    // sizeof(two_x): 1
   }
 
   // construct an expression from two symbols with compile-time known
@@ -55,7 +54,7 @@ auto main() -> int
     std::cout << x_plus_y << "\n";
     // expression { sym::op::plus, expression { sym::op::identity, symbol(x) [double: [-inf, -4.94066e-324]] } double: [-inf, -4.94066e-324], expression { sym::op::identity, symbol(y) [double: [-inf, -4.94066e-324]] } double: [-inf, -4.94066e-324] } double: [-inf, -4.94066e-324]
     std::cout << "sizeof(x_plus_y): " << sizeof(x_plus_y) << "\n";
-    // sizeof(x_plus_y): 2
+    // sizeof(x_plus_y): 1
   }
 
   // construct an expression from two symbols with compile-time known
@@ -68,7 +67,7 @@ auto main() -> int
     std::cout << x_plus_y << "\n";
     // expression { sym::op::plus, expression { sym::op::identity, symbol(x) [double: [4.94066e-324, inf]] } double: [4.94066e-324, inf], expression { sym::op::identity, symbol(y) [double: [-inf, -4.94066e-324]] } double: [-inf, -4.94066e-324] } double: [-inf, inf]
     std::cout << "sizeof(x_plus_y): " << sizeof(x_plus_y) << "\n";
-    // sizeof(x_plus_y): 2
+    // sizeof(x_plus_y): 1
   }
 
 #if 0

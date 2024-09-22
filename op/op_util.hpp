@@ -28,8 +28,6 @@ inline constexpr struct
   static constexpr auto
   operator()(Op, Args&&... args) -> op_invoke_result_t<Op, Args&&...>
   {
-    // auto c = typename Op::constraint{}(std::as_const(args).constraint()...);
-
     return op_invoke_result_t<Op, Args&&...>{
         std::tuple{expr(std::forward<Args>(args))...}};
   }

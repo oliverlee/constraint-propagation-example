@@ -67,17 +67,48 @@ struct check_symbol_constraints
 
 /// @}
 
-/// expression type
-///
-template <class Op, class Args, class Constraint>
-class expression
+namespace detail {
+
+template <class Args>
+struct args_base
 {
+  static constexpr auto is_empty = false;
+
   [[no_unique_address]]
   Args args_;
 
-  static_assert(
-      std::tuple_size_v<Args> != 0,
-      "`Args` must be a specialization of `std::tuple`");
+  [[nodiscard]]
+  constexpr auto args() const -> const Args&
+  {
+    return args_;
+  }
+};
+
+template <class... Ts>
+  requires (std::is_empty_v<Ts> and ...)
+struct args_base<std::tuple<Ts...>>
+{
+  static constexpr auto is_empty = true;
+
+  args_base() = default;
+
+  constexpr explicit args_base(std::tuple<Ts...>) {}
+
+  [[nodiscard]]
+  constexpr auto args() const -> const std::tuple<Ts...>&
+  {
+    return static_instance<std::tuple<Ts...>>;
+  }
+};
+
+}  // namespace detail
+
+/// expression type
+///
+template <class Op, class Args, class Constraint>
+class expression : detail::args_base<Args>
+{
+  using args_base_type = detail::args_base<Args>;
 
   template <template <class...> class list, class... Ts>
   static consteval auto
@@ -89,7 +120,7 @@ class expression
 
   template <class PreconditionVisitor>
   constexpr expression(PreconditionVisitor precondition, Args args)
-      : args_{std::move(args)}
+      : args_base_type{std::move(args)}
   {
     visit(std::ref(precondition));
     assert(
@@ -102,6 +133,16 @@ public:
 
   static constexpr auto is_unconstrained =
       determined_unconstrained(std::type_identity<Args>{});
+
+  constexpr expression()
+    requires (args_base_type::is_empty)
+      : expression{
+            std::conditional_t<
+                is_unconstrained,
+                skip_precondition_check,
+                check_symbol_constraints<>>{},
+            Args{}}
+  {}
 
   constexpr explicit expression(Args args)
       : expression{
@@ -117,11 +158,7 @@ public:
   {
     return detail::static_instance<op_type>;
   }
-  [[nodiscard]]
-  constexpr auto args() const -> const Args&
-  {
-    return args_;
-  }
+  using args_base_type::args;
   [[nodiscard]]
   constexpr auto constraint() const -> const constraint_type&
   {
@@ -181,7 +218,7 @@ inline constexpr struct
   [[nodiscard]]
   static constexpr auto operator()(symbol<Ts...> s) -> R
   {
-    return R{std::tuple{s}};
+    return R{std::tuple{std::move(s)}};
   }
 } expr{};
 

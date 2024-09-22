@@ -1,8 +1,10 @@
 #pragma once
 
+#include <concepts>
+
 namespace sym::detail {
 
-template <class T>
+template <std::default_initializable T>
 inline constexpr auto static_instance = T{};
 
 }
