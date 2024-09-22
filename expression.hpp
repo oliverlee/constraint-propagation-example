@@ -1,5 +1,6 @@
 #pragma once
 
+#include "detail/static_instance.hpp"
 #include "detail/tuple_for_each.hpp"
 #include "is_unconstrained.hpp"
 #include "op/identity.hpp"
@@ -70,18 +71,18 @@ struct check_symbol_constraints
 /// expression type
 ///
 template <class Op, class Args, class Constraint>
-class expression : Op, Args, public Constraint
+class expression
 {
+  [[no_unique_address]]
+  Args args_;
+
   static_assert(
       std::tuple_size_v<Args> != 0,
       "`Args` must be a specialization of `std::tuple`");
 
-  // TODO use a custom tuple type to allow EBO
-
   template <class PreconditionVisitor>
-  constexpr expression(
-      PreconditionVisitor precondition, Op op, Args args, Constraint c)
-      : Op{op}, Args{std::move(args)}, Constraint{c}
+  constexpr expression(PreconditionVisitor precondition, Args args)
+      : args_{std::move(args)}
   {
     visit(std::ref(precondition));
     assert(
@@ -89,36 +90,32 @@ class expression : Op, Args, public Constraint
   }
 
 public:
-  constexpr expression(Op op, Args args, Constraint c)
+  using op_type = Op;
+  using constraint_type = Constraint;
+
+  constexpr explicit expression(Args args)
       : expression{
             std::conditional_t<
                 is_unconstrained<expression>::value,
                 skip_precondition_check,
                 check_symbol_constraints<>>{},
-            op,
-            std::move(args),
-            c}
+            std::move(args)}
   {}
-  [[nodiscard]]
-  constexpr auto op() const -> const Op&
-  {
-    return static_cast<const Op&>(*this);
-  }
 
   [[nodiscard]]
-  constexpr auto args() -> Args&
+  constexpr auto op() const -> const op_type&
   {
-    return static_cast<Args&>(*this);
+    return detail::static_instance<op_type>;
   }
   [[nodiscard]]
   constexpr auto args() const -> const Args&
   {
-    return static_cast<const Args&>(*this);
+    return args_;
   }
   [[nodiscard]]
-  constexpr auto constraint() const -> const Constraint&
+  constexpr auto constraint() const -> const constraint_type&
   {
-    return static_cast<const Constraint&>(*this);
+    return detail::static_instance<constraint_type>;
   }
 
   template <class Visitor>
@@ -138,7 +135,7 @@ public:
 
   friend auto operator<<(std::ostream& os, const expression& ex) -> auto&
   {
-    os << "expression { " << detail::type_name<Op>();
+    os << "expression { " << detail::type_name<op_type>();
 
     [&]<std::size_t... Is>(std::index_sequence<Is...>) {
       auto _ = ((os << ", " << std::get<Is>(ex.args()), 0) + ...);
@@ -174,18 +171,16 @@ inline constexpr struct
   {
     return std::move(ex);
   }
-  template <class... Ts>
-  [[nodiscard]]
-  static constexpr auto operator()(symbol<Ts...> s)
-      -> expression<
+  template <
+      class... Ts,
+      class R = expression<
           op::identity,
           std::tuple<symbol<Ts...>>,
-          typename symbol<Ts...>::constraint_type>
+          typename symbol<Ts...>::constraint_type>>
+  [[nodiscard]]
+  static constexpr auto operator()(symbol<Ts...> s) -> R
   {
-    return expression{
-        op::identity{},
-        std::tuple{s},
-        op::identity::constraint{}(s.constraint())};
+    return R{std::tuple{s}};
   }
 } expr{};
 

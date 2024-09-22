@@ -26,12 +26,12 @@ inline constexpr struct
 {
   template <class Op, class... Args>
   static constexpr auto
-  operator()(Op op, Args&&... args) -> op_invoke_result_t<Op, Args&&...>
+  operator()(Op, Args&&... args) -> op_invoke_result_t<Op, Args&&...>
   {
-    auto c = typename Op::constraint{}(std::as_const(args).constraint()...);
+    // auto c = typename Op::constraint{}(std::as_const(args).constraint()...);
 
     return op_invoke_result_t<Op, Args&&...>{
-        op, std::tuple{expr(std::forward<Args>(args))...}, c};
+        std::tuple{expr(std::forward<Args>(args))...}};
   }
 } op_invoke{};
 

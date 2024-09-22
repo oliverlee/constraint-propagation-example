@@ -1,6 +1,7 @@
 #pragma once
 
 #include "constraint.hpp"
+#include "detail/static_instance.hpp"
 #include "is_unconstrained.hpp"
 
 #include <algorithm>
@@ -71,11 +72,11 @@ struct symbol_base
 template <
     class String = std::string,
     class Constraint = std::remove_cvref_t<decltype(constraint::real)>>
-class [[nodiscard]] symbol
-    : String,
-      Constraint,
-      symbol_base<symbol<String, Constraint>>
+class [[nodiscard]] symbol : symbol_base<symbol<String, Constraint>>
 {
+  [[no_unique_address]]
+  String s_;
+
 public:
   using constraint_type = Constraint;
 
@@ -83,20 +84,17 @@ public:
       constraint_type,
       std::remove_cvref_t<decltype(constraint::real)>>;
 
-  constexpr explicit symbol(String name, Constraint c = {})
-      : String{std::move(name)}, Constraint{c}
-  {}
+  constexpr explicit symbol(String name) : s_{std::move(name)} {}
 
   [[nodiscard]]
   constexpr auto name() const -> std::string_view
   {
-    return static_cast<const String&>(*this);
+    return s_;
   }
-
   [[nodiscard]]
   constexpr auto constraint() const -> const constraint_type&
   {
-    return static_cast<const constraint_type&>(*this);
+    return detail::static_instance<constraint_type>;
   }
 
   template <class Refined>
@@ -104,13 +102,13 @@ public:
   constexpr auto operator[](Refined c) && -> symbol<String, Refined>
   {
     const auto is_narrowing =
-        [&c1 = std::as_const(*this).constraint(), &c2 = std::as_const(c)] {
+        [&c1 = this->constraint(), &c2 = std::as_const(c)] {
           return c1.min() <= c2.min() and c1.max() >= c2.max();
         };
 
     assert(is_narrowing() and  //
            "constraint value does not refine existing constraint on symbol.");
-    return symbol<String, Refined>{std::move(*this), c};
+    return symbol<String, Refined>{std::move(s_)};
   }
 };
 
@@ -125,9 +123,9 @@ struct is_unconstrained<symbol<Ts...>>
 {};
 
 // non-owning type-erased view of a symbol
-class [[nodiscard]] any_symbol_view
+class [[nodiscard]] any_symbol_view : symbol_base<any_symbol_view>
 {
-  std::string_view name_;
+  std::string_view s_;
   constraint::any_ordered c_;
 
 public:
@@ -135,13 +133,13 @@ public:
 
   template <class Symbol>
   constexpr explicit any_symbol_view(const Symbol& s)
-      : name_{s.name()}, c_{s.constraint()}
+      : s_{s.name()}, c_{s.constraint()}
   {}
 
   [[nodiscard]]
   constexpr auto name() const -> std::string_view
   {
-    return name_;
+    return s_;
   }
 
   [[nodiscard]]

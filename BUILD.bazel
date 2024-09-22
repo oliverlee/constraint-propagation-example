@@ -12,6 +12,7 @@ cc_library(
     name = "sym",
     srcs = [
         "constraint.hpp",
+        "detail/static_instance.hpp",
         "detail/tuple_for_each.hpp",
         "detail/type_name.hpp",
         "expression.hpp",

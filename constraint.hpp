@@ -54,28 +54,33 @@ class ordered_base
 /// Min and Max are inclusive
 ///
 template <class Min, class Max>
-class [[nodiscard]] ordered : Min, Max, ordered_base<ordered<Min, Max>>
+class [[nodiscard]] ordered : ordered_base<ordered<Min, Max>>
 {
+  [[no_unique_address]]
+  Min min_;
+  [[no_unique_address]]
+  Max max_;
+
 public:
   using value_type =
       std::common_type_t<typename Min::value_type, typename Max::value_type>;
 
   ordered() = default;
 
-  constexpr ordered(Min min, Max max) : Min{min}, Max{max}
+  constexpr ordered(Min min, Max max) : min_{min}, max_{max}
   {
-    assert(min <= max);
+    assert(min_ <= max_);
   }
 
   [[nodiscard]]
   constexpr auto min() const -> value_type
   {
-    return Min::value();
+    return min_.value();
   }
   [[nodiscard]]
   constexpr auto max() const -> value_type
   {
-    return Max::value();
+    return max_.value();
   }
 };
 
